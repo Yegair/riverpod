@@ -103,8 +103,9 @@ void main() {
       () async {
         final container = ProviderContainer.test();
         final controller = StreamController<int>();
-        final provider = Provider((ref) => ref);
         addTearDown(controller.close);
+        final provider = Provider((ref) => ref);
+
         final dep = StreamProvider<int>((ref) => controller.stream);
         final error = StateError('selector failed');
 
