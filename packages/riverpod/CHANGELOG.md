@@ -5,6 +5,7 @@
   unaffected. This removes 34 transitive packages from the dependency graph of
   every project that uses Riverpod, including `analyzer`, whose version ceiling
   was blocking other tooling. (thanks to @samithahansaka)
+- Fix `selectAsync` notifying a closed subscription after an upstream refresh.
 
 ## 3.4.2 - 2026-07-28
 
@@ -1576,4 +1577,3 @@ The behavior is the same. Only the syntax changed.
 Initial release
 
 <!-- cSpell:ignoreRegExp @\w+ -->
-
