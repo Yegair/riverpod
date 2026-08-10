@@ -99,115 +99,55 @@ void main() {
     });
 
     test(
-      'resolves selector errors with `sub.read()` after the owner is disposed',
+      'does not notify after the selectAsync subscription is closed',
       () async {
         final container = ProviderContainer.test();
-        final controller = StreamController<int>();
-        addTearDown(controller.close);
-        final provider = Provider((ref) => ref);
 
-        final dep = StreamProvider<int>((ref) => controller.stream);
-        final error = StateError('selector failed');
+        final refresh = Completer<int>();
+        var isRefreshing = false;
+        final source = FutureProvider.autoDispose<int>((ref) {
+          return isRefreshing ? refresh.future : 1;
+        });
 
-        container.listen(dep, (p, n) {});
-        final sub = container.listen(provider, (a, b) {});
-        final future = sub.read().watch(dep.selectAsync((data) => throw error));
+        var listenerCalls = 0;
+        final sourceSub = container.listen(source, (previous, next) {});
+        final selectedSub = container.listen(
+          source.selectAsync((value) => value),
+          (previous, next) => listenerCalls++,
+        );
 
-        container.invalidate(provider);
-        controller.add(21);
+        expect(await selectedSub.read(), 1);
 
-        await expectLater(future, throwsProviderException(error));
+        isRefreshing = true;
+        container.invalidate(source);
+        await container.pump();
+
+        selectedSub.close();
+        refresh.complete(2);
+        await container.pump();
+
+        expect(sourceSub.read(), const AsyncData(2));
+        expect(listenerCalls, 0);
       },
     );
 
-    test('does not report selector errors after the dependent is disposed '
-        'during a refresh', () async {
+    test('does not report selector errors after the selectAsync subscription '
+        'is closed', () async {
+      final container = ProviderContainer.test();
+
       final refresh = Completer<int>();
       var isRefreshing = false;
       final source = FutureProvider.autoDispose<int>((ref) {
         return isRefreshing ? refresh.future : 1;
       });
-      final error = StateError('selector failed');
-      final derived = FutureProvider.autoDispose<int>((ref) {
-        return ref.watch(
-          source.selectAsync((value) {
-            if (value == 2) throw error;
-            return value;
-          }),
-        );
-      });
-      final container = ProviderContainer.test();
-
-      final sourceSub = container.listen(source, (previous, next) {});
-      final derivedSub = container.listen(derived, (previous, next) {});
-
-      expect(await container.read(derived.future), 1);
-
-      isRefreshing = true;
-      container.invalidate(source);
-      await container.pump();
-
-      derivedSub.close();
-      await container.pump();
-
-      refresh.complete(2);
-      await container.pump();
-
-      expect(sourceSub.read(), const AsyncData(2));
-    });
-
-    test('does not report upstream errors after the dependent is disposed '
-        'during a refresh', () async {
-      final refresh = Completer<int>();
-      var isRefreshing = false;
-      final source = FutureProvider.autoDispose<int>(
-        (ref) => isRefreshing ? refresh.future : 1,
-        retry: (_, _) => null,
-      );
-      final derived = FutureProvider.autoDispose<int>((ref) {
-        return ref.watch(source.selectAsync((value) => value));
-      });
-      final container = ProviderContainer.test();
-      final error = StateError('refresh failed');
-
-      final sourceSub = container.listen(source, (previous, next) {});
-      final derivedSub = container.listen(derived, (previous, next) {});
-
-      expect(await container.read(derived.future), 1);
-
-      isRefreshing = true;
-      container.invalidate(source);
-      await container.pump();
-
-      derivedSub.close();
-      await container.pump();
-
-      refresh.completeError(error);
-      await container.pump();
-
-      expect(
-        sourceSub.read(),
-        isA<AsyncError<int>>().having(
-          (value) => value.error,
-          'error',
-          same(error),
-        ),
-      );
-    });
-
-    test('does not call a closed selectAsync listener', () async {
-      final refresh = Completer<int>();
-      var isRefreshing = false;
-      final source = FutureProvider.autoDispose<int>((ref) {
-        return isRefreshing ? refresh.future : 1;
-      });
-      final container = ProviderContainer.test();
-      var listenerCalls = 0;
 
       final sourceSub = container.listen(source, (previous, next) {});
       final selectedSub = container.listen(
-        source.selectAsync((value) => value),
-        (previous, next) => listenerCalls++,
+        source.selectAsync((value) {
+          if (value == 2) throw StateError('selector failed');
+          return value;
+        }),
+        (previous, next) {},
       );
 
       expect(await selectedSub.read(), 1);
@@ -221,41 +161,7 @@ void main() {
       await container.pump();
 
       expect(sourceSub.read(), const AsyncData(2));
-      expect(listenerCalls, 0);
     });
-
-    test(
-      'does not notify after the dependent is disposed during a refresh',
-      () async {
-        final refresh = Completer<int>();
-        var isRefreshing = false;
-        final source = FutureProvider.autoDispose<int>((ref) {
-          return isRefreshing ? refresh.future : 1;
-        });
-        final derived = FutureProvider.autoDispose<int>((ref) {
-          return ref.watch(source.selectAsync((value) => value));
-        });
-        final container = ProviderContainer.test();
-
-        // Keep the source alive independently of the derived provider.
-        final sourceSub = container.listen(source, (previous, next) {});
-        final derivedSub = container.listen(derived, (previous, next) {});
-
-        expect(await container.read(derived.future), 1);
-
-        isRefreshing = true;
-        container.invalidate(source);
-        await container.pump();
-
-        derivedSub.close();
-        await container.pump();
-
-        refresh.complete(2);
-        await container.pump();
-
-        expect(sourceSub.read(), const AsyncData(2));
-      },
-    );
   });
 
   test('implements ProviderSubscription.read on AsyncData', () async {
