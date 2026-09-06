@@ -158,7 +158,7 @@ void main() {
 
       selectedSub.close();
       refresh.complete(2);
-        await container.read(source.future);
+      await container.read(source.future);
 
       expect(sourceSub.read(), const AsyncData(2));
     });
