@@ -124,7 +124,7 @@ void main() {
 
         selectedSub.close();
         refresh.complete(2);
-        await container.pump();
+        await container.read(source.future);
 
         expect(sourceSub.read(), const AsyncData(2));
         expect(listenerCalls, 0);
